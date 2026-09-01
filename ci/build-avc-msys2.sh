@@ -21,6 +21,9 @@ pacman -S --needed --noconfirm \
   mingw-w64-x86_64-libxml2 \
   git
 
+# Prefer static archives so libass/libplacebo/font stack link into libmpv-2.dll.
+export PKG_CONFIG="pkg-config --static"
+
 mkdir -p subprojects
 cat >subprojects/ffmpeg.wrap <<'EOF'
 [wrap-git]
@@ -70,12 +73,14 @@ meson setup build \
   -Ddrm=disabled \
   -Dwayland=disabled \
   -Dx11=disabled \
+  -Dlibplacebo:default_library=static \
   -Dlibplacebo:demos=false \
   -Dlibplacebo:tests=false \
   -Dlibplacebo:vulkan=disabled \
   -Dlibplacebo:d3d11=enabled \
   -Dlibplacebo:shaderc=enabled \
   -Dlibplacebo:lcms=disabled \
+  -Dlibplacebo:dovi=disabled \
   -Dffmpeg:programs=disabled \
   -Dffmpeg:tests=disabled \
   -Dffmpeg:avdevice=disabled \
@@ -169,6 +174,17 @@ enqueue() {
   queued[$key]=1
   queue+=("$f")
 }
+
+# h264_qsv loads libvpl via dlopen; ldd does not see it.
+for runtime_dll in libvpl-2.dll; do
+  src="$mingw_bin/$runtime_dll"
+  if [[ ! -f "$src" ]]; then
+    echo "ERROR: required runtime DLL missing: $src" >&2
+    exit 1
+  fi
+  cp -f "$src" "$flat_dir/"
+  enqueue "$flat_dir/$runtime_dll"
+done
 
 enqueue "$flat_dir/libmpv-2.dll"
 while ((${#queue[@]} > 0)); do
