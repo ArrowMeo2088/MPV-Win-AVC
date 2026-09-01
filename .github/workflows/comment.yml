@@ -1,9 +1,7 @@
 name: comment
 
 on:
-  workflow_run:
-    workflows: [build]
-    types: [completed]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
