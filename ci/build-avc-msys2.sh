@@ -129,6 +129,12 @@ else
   meson setup build "${meson_args[@]}"
 fi
 
+if [[ -f build/libmpv-2.dll.rsp ]]; then
+  grep -q -- '-lxml2' build/libmpv-2.dll.rsp || { echo "ERROR: libmpv link rsp missing -lxml2" >&2; exit 1; }
+else
+  grep -q -- 'xml2' build/build.ninja || { echo "ERROR: build.ninja missing libxml2 link" >&2; exit 1; }
+fi
+
 bash "$root_dir/ci/link-smoke.sh"
 
 ninja -C build -j"$jobs" libmpv-2.dll

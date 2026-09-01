@@ -36,10 +36,10 @@ FFmpeg 来自独立仓库 [FFmpeg-Win-AVC-DLL](https://github.com/ArrowMeo2088/F
 | 依赖 | 方式 | meson 处理 |
 |------|------|------------|
 | libav* | 静态 `.a` | `dependency(..., static: true)` |
-| libxml2（DASH） | 静态 | `dependency('libxml-2.0', static: true)` |
+| libxml2（DASH） | 静态 | `dependency('libxml-2.0', static: true)` + `library()` 显式 `link_args`（`pkg-config --static libxml-2.0`） |
 | libvpl（QSV） | 动态 `libvpl-2.dll` | `cc.find_library('vpl', static: false)` |
 
-FFmpeg prefix 的 `.pc` 已剥离 `-lvpl`（见 FFmpeg `package-win-mingw-static.sh`）。构建前会运行 `ci/link-smoke.sh` 验证链接闭包。
+FFmpeg 须以 `-DLIBXML_STATIC` 重编（见 FFmpeg `BUILD.md`）。`ci/link-smoke.sh` 通过 `av_find_input_format("dash")` + `--whole-archive libavformat` 拉入 `dashdec.o`，避免假阳性。
 
 ## 本地构建
 

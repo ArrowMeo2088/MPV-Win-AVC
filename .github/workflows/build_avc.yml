@@ -45,25 +45,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ffmpeg/build/win-x64-static
-          key: ffmpeg-avc-static-v4-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh') }}
+          key: ffmpeg-avc-static-v5-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh', 'ffmpeg/scripts/build-win-mingw-static.sh') }}
           restore-keys: |
-            ffmpeg-avc-static-v4-
+            ffmpeg-avc-static-v5-
 
       - name: Cache FFmpeg install prefix
         uses: actions/cache@v4
         with:
           path: ffmpeg/dist/ffmpeg-win-x64-static/prefix
-          key: ffmpeg-avc-prefix-v4-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh') }}
+          key: ffmpeg-avc-prefix-v5-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh', 'ffmpeg/scripts/build-win-mingw-static.sh') }}
           restore-keys: |
-            ffmpeg-avc-prefix-v4-
+            ffmpeg-avc-prefix-v5-
 
       - name: Cache MPV build tree
         uses: actions/cache@v4
         with:
           path: mpv/build
-          key: mpv-avc-build-v4-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/ci/link-smoke.sh', 'mpv/meson.build') }}
+          key: mpv-avc-build-v5-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/ci/link-smoke.sh', 'mpv/meson.build') }}
           restore-keys: |
-            mpv-avc-build-v4-
+            mpv-avc-build-v5-
 
       - name: Setup MSYS2 MINGW64
         uses: msys2/setup-msys2@v2
@@ -92,12 +92,15 @@ jobs:
           FFMPEG_SRC: ../ffmpeg
         run: |
           bash ../ffmpeg/scripts/build-win-mingw-static.sh
+          avformat_a="../ffmpeg/dist/ffmpeg-win-x64-static/prefix/lib/libavformat.a"
           export PKG_CONFIG_PATH="$(cd ../ffmpeg/dist/ffmpeg-win-x64-static/prefix && pwd)/lib/pkgconfig"
           export PKG_CONFIG="pkg-config --static"
           pkg-config --print-errors --exists libavcodec libavformat libavutil libplacebo
           ls ../ffmpeg/dist/ffmpeg-win-x64-static/prefix/lib/*.a
           pkg-config --libs --static libavformat | grep -q -- '-lxml2'
           pkg-config --libs --static libavcodec | grep -qv -- '-lvpl'
+          nm "$avformat_a" | grep -q ' U xmlFree'
+          nm "$avformat_a" | grep -q '__imp_xml' && { echo "ERROR: old libxml2 DLL ABI in libavformat.a" >&2; exit 1; }
           bash ./ci/link-smoke.sh
 
       - name: Build libmpv (FFmpeg static + DASH)
@@ -120,6 +123,10 @@ jobs:
           pkg-config --libs --static libavcodec libavformat || true
           echo
           ls -la /mingw64/lib/libvpl* 2>/dev/null || true
+          echo
+          if [[ -f build/libmpv-2.dll.rsp ]]; then
+            tr ' ' '\n' < build/libmpv-2.dll.rsp | grep -i xml || true
+          fi
           echo
           if [[ -f build/meson-logs/meson-log.txt ]]; then
             tail -n 200 build/meson-logs/meson-log.txt

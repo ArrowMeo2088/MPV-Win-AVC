@@ -1840,9 +1840,13 @@ major = client_h_define.split('|')[0].split('<<')[0].strip('() ')
 minor = client_h_define.split('|')[1].strip('() ')
 client_api_version = major + '.' + minor + '.0'
 
+pkgconf = find_program('pkg-config')
+libxml2_link = run_command(pkgconf, '--static', '--libs', 'libxml-2.0',
+                           check: true).stdout().strip().split()
+
 libmpv = library('mpv', sources, dependencies: dependencies, gnu_symbol_visibility: 'hidden',
                  include_directories: incdir_public,
-                 link_args: cc.get_supported_link_arguments(['-Wl,-Bsymbolic', '-static-libgcc']),
+                 link_args: cc.get_supported_link_arguments(['-Wl,-Bsymbolic', '-static-libgcc']) + libxml2_link,
                  version: client_api_version, install: get_option('libmpv'),
                  build_by_default: get_option('libmpv'))
 
