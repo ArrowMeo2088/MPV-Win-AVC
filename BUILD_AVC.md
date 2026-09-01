@@ -2,6 +2,8 @@
 
 面向 B 站流式播放的 **MinGW libmpv**：Intel QSV（`h264_qsv`）+ AAC 软解 + DASH/fMP4 + HTTPS。
 
+FFmpeg 来自独立仓库 [FFmpeg-Win-AVC-DLL](https://github.com/ArrowMeo2088/FFmpeg-Win-AVC-DLL)（configure 静态库），**不再**使用 gstreamer meson-ports ffmpeg。
+
 ## 功能范围
 
 | 启用 | 禁用 |
@@ -13,39 +15,43 @@
 
 ## 运行时部署（mpv-kernel）
 
-仅拷贝 `dist/mpv-win-avc-x64/bin/` 到应用目录，与 exe 同级：
+拷贝 `dist/mpv-win-avc-x64/bin/` 到应用目录，与 exe 同级。
+
+**阶段二（当前 CI）**：`MPV_PACK_MODE=ldd`，包含 libplacebo/shaderc 等 MinGW DLL。
+
+**阶段三目标**：`MPV_PACK_MODE=minimal`，≤5 DLL、≤40 MiB。
 
 | DLL | 说明 |
 |-----|------|
-| `libmpv-2.dll` | libmpv + 静态 FFmpeg / libplacebo / shaderc / spirv-cross |
-| `libvpl-2.dll` | Intel QSV（`h264_qsv` 运行时 `dlopen`） |
-| `libgcc_s_seh-1.dll` | 若 `ldd` 需要 |
-| `libstdc++-6.dll` | 若 `ldd` 需要 |
-| `libwinpthread-1.dll` | 若 `ldd` 需要 |
+| `libmpv-2.dll` | libmpv + 静态 FFmpeg |
+| `libvpl-2.dll` | Intel QSV（必需） |
+| `libplacebo-*.dll` 等 | 阶段二动态渲染栈（阶段三静态化后移除） |
 
-`bin/MANIFEST.txt` 记录实际文件大小。打包模式 `MPV_PACK_MODE=minimal`（默认）时，出现白名单外 DLL 则 CI 失败。
+`bin/MANIFEST.txt` 记录实际文件大小与 DLL 数量。
 
-**不应出现**：`libass-9.dll`、`libfreetype`、`libshaderc_shared.dll`、`libplacebo-360.dll` 等。
-
-## CI / 本地构建
+## 本地构建
 
 ```bash
-cd /path/to/MPV-Win-AVC
-bash ./ci/build-avc-msys2.sh
+# Ref 下并列克隆
+git clone --depth=1 https://github.com/ArrowMeo2088/FFmpeg-Win-AVC-DLL ../FFmpeg-Win-AVC-DLL
+git clone --depth=1 https://github.com/ArrowMeo2088/MPV-Win-AVC .
+
+# MSYS2 MINGW64 shell
+FFMPEG_SRC=../FFmpeg-Win-AVC-DLL bash ./ci/build-avc-msys2.sh
 ```
 
-脚本会：
+环境变量：
 
-1. 自编译**静态** `shaderc`、`spirv-cross` 到 `.deps-prefix/`（CI 有 cache，命中后跳过）
-2. `force-fallback` 构建**静态** `libplacebo`（无 dovi/lcms/vulkan）
-3. 使用 in-tree **libass stub**（无 pacman libass）
-4. `-Dbuildtype=release`、可选 `-Db_lto=true`（`MPV_LTO=false` 可加速调试）、`strip libmpv-2.dll`
-5. 增量 `meson setup --reconfigure` + `ninja`（不再每次 `rm -rf build`）
-6. 显式复制 `libvpl-2.dll` 并校验 `ldd` 闭包
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `FFMPEG_SRC` | `../FFmpeg-Win-AVC-DLL` | FFmpeg 源码目录 |
+| `FFMPEG_PREFIX` | `$FFMPEG_SRC/dist/.../prefix` | pkg-config 前缀 |
+| `MPV_PACK_MODE` | `ldd` | `ldd` 全闭包；`minimal` 白名单 |
+| `MPV_LTO` | `false` | 链接时 LTO |
 
-CI 加速：GitHub Actions cache 缓存 `.deps-prefix`、`.build-deps`、`subprojects/*`、`build/`；MSYS2 `cache: true` 缓存 pacman 包。改源码小修时通常 **5–8 分钟**，冷启动约 **12–15 分钟**。
+## CI
 
-回退全量 `ldd` 打包：`MPV_PACK_MODE=ldd bash ./ci/build-avc-msys2.sh`
+`.github/workflows/build_avc.yml` 串联 checkout FFmpeg + MPV，MSYS2 MINGW64 构建。
 
 ## mpv-kernel 初始化
 
@@ -63,6 +69,6 @@ await client.SetHardwareDecodeAsync(HardwareDecodeType.None);
 
 ## 验收
 
-1. `bin/` 内 ≤5 个 DLL，含 `libvpl-2.dll`
-2. 总体积目标 ≤40 MiB
-3. Intel 核显上 DASH URL 能起播（`h264_qsv`）
+1. CI `build_avc` 绿，`bin/libmpv-2.dll` + `libvpl-2.dll` 存在
+2. Intel 核显上 DASH URL 能起播（`h264_qsv`）
+3. 阶段三：`bin/` ≤5 DLL，总 ≤40 MiB（见 [DOCS/PHASE3-SIZE.md](DOCS/PHASE3-SIZE.md)）

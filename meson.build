@@ -19,16 +19,16 @@ build_root = meson.project_build_root()
 source_root = meson.project_source_root()
 python = find_program('python3')
 
-# ffmpeg
-libavcodec = dependency('libavcodec', version: '>= 60.31.102')
-libavfilter = dependency('libavfilter', version: '>= 9.12.100')
-libavformat = dependency('libavformat', version: '>= 60.16.100')
-libavutil = dependency('libavutil', version: '>= 58.29.100')
-libswresample = dependency('libswresample', version: '>= 4.12.100')
-libswscale = dependency('libswscale', version: '>= 7.5.100')
+# ffmpeg (static from FFmpeg-Win-AVC-DLL prefix)
+libavcodec = dependency('libavcodec', version: '>= 60.31.102', static: true)
+libavfilter = dependency('libavfilter', version: '>= 9.12.100', static: true)
+libavformat = dependency('libavformat', version: '>= 60.16.100', static: true)
+libavutil = dependency('libavutil', version: '>= 58.29.100', static: true)
+libswresample = dependency('libswresample', version: '>= 4.12.100', static: true)
+libswscale = dependency('libswscale', version: '>= 7.5.100', static: true)
 
-libplacebo = dependency('libplacebo', version: '>=7.360.1', static: true,
-                default_options: ['default_library=static', 'demos=false', 'tests=false',
+libplacebo = dependency('libplacebo', version: '>=7.360.1',
+                default_options: ['demos=false', 'tests=false',
                                   'vulkan=disabled', 'd3d11=enabled', 'shaderc=enabled',
                                   'lcms=disabled', 'dovi=disabled'])
 

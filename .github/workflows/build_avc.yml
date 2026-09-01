@@ -15,7 +15,6 @@ on:
       - 'sub/ass.h'
       - 'sub/ass_types.h'
       - 'patches/**'
-      - 'subprojects/**'
       - '**/*.c'
       - '**/*.h'
       - '**/*.build'
@@ -30,26 +29,30 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout MPV-Win-AVC
+        uses: actions/checkout@v4
+        with:
+          path: mpv
 
-      - name: Cache static deps (shaderc/spirv-cross)
+      - name: Checkout FFmpeg-Win-AVC-DLL
+        uses: actions/checkout@v4
+        with:
+          repository: ArrowMeo2088/FFmpeg-Win-AVC-DLL
+          path: ffmpeg
+
+      - name: Cache FFmpeg build tree
         uses: actions/cache@v4
         with:
-          path: |
-            .deps-prefix
-            .build-deps
-          key: mpv-avc-deps-${{ hashFiles('ci/build-avc-msys2.sh') }}
+          path: ffmpeg/build/win-x64-static
+          key: ffmpeg-avc-static-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
           restore-keys: |
-            mpv-avc-deps-
+            ffmpeg-avc-static-
 
-      - name: Cache meson subprojects + build tree
+      - name: Cache MPV build tree
         uses: actions/cache@v4
         with:
-          path: |
-            subprojects/ffmpeg
-            subprojects/libplacebo
-            build
-          key: mpv-avc-build-${{ hashFiles('ci/build-avc-msys2.sh', 'meson.build', 'meson.options') }}
+          path: mpv/build
+          key: mpv-avc-build-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/meson.build') }}
           restore-keys: |
             mpv-avc-build-
 
@@ -60,22 +63,33 @@ jobs:
           update: true
           cache: true
 
-      - name: Build libmpv (AVC + DASH)
+      - name: Build libmpv (FFmpeg static + DASH)
         shell: msys2 {0}
-        run: bash ./ci/build-avc-msys2.sh
+        env:
+          FFMPEG_SRC: ${{ github.workspace }}/ffmpeg
+          FFMPEG_DIST_DIR: ${{ github.workspace }}/ffmpeg/dist/ffmpeg-win-x64-static
+          FFMPEG_PREFIX: ${{ github.workspace }}/ffmpeg/dist/ffmpeg-win-x64-static/prefix
+          MPV_PACK_MODE: ldd
+          MPV_LTO: 'false'
+        run: bash ./mpv/ci/build-avc-msys2.sh
+        working-directory: ${{ github.workspace }}
 
-      - name: Print meson log on failure
+      - name: Print logs on failure
         if: failure()
         shell: msys2 {0}
         run: |
-          if [[ -f build/meson-logs/meson-log.txt ]]; then
-            tail -n 200 build/meson-logs/meson-log.txt
+          if [[ -f mpv/build/meson-logs/meson-log.txt ]]; then
+            tail -n 200 mpv/build/meson-logs/meson-log.txt
           fi
+          if [[ -f ffmpeg/build/win-x64-static/ffbuild/config.log ]]; then
+            tail -n 200 ffmpeg/build/win-x64-static/ffbuild/config.log
+          fi
+        working-directory: ${{ github.workspace }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: mpv-win-avc-x64-${{ github.run_number }}
-          path: dist/mpv-win-avc-x64/
+          path: mpv/dist/mpv-win-avc-x64/
           retention-days: 30
           if-no-files-found: error
