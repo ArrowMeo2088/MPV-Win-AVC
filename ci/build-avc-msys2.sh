@@ -21,11 +21,14 @@ pacman -S --needed --noconfirm \
   mingw-w64-x86_64-meson \
   mingw-w64-x86_64-ninja \
   mingw-w64-x86_64-pkgconf \
+  mingw-w64-x86_64-nasm \
   mingw-w64-x86_64-libplacebo \
   mingw-w64-x86_64-shaderc \
   mingw-w64-x86_64-spirv-cross \
   mingw-w64-x86_64-libvpl \
-  mingw-w64-x86_64-libxml2
+  mingw-w64-x86_64-libxml2 \
+  make \
+  diffutils
 
 if [[ ! -f "$ffmpeg_prefix/lib/pkgconfig/libavcodec.pc" ]]; then
   echo "=== Building FFmpeg from $ffmpeg_src ==="
