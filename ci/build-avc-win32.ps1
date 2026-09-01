@@ -7,7 +7,13 @@ Set-StrictMode -Version Latest
 
 $subprojects = "subprojects"
 $distDir = "dist/mpv-win-avc-x64"
-$vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { "C:\vcpkg" }
+# DevShell overwrites VCPKG_ROOT; always prefer GHA vcpkg at C:\vcpkg.
+$vcpkgRoot = 'C:/vcpkg'
+if (-not (Test-Path "$vcpkgRoot/installed/x64-windows/tools/pkgconf/pkgconf.exe")) {
+    if ($env:VCPKG_ROOT -and (Test-Path "$($env:VCPKG_ROOT)/installed/x64-windows/tools/pkgconf/pkgconf.exe")) {
+        $vcpkgRoot = ($env:VCPKG_ROOT -replace '\\', '/')
+    }
+}
 
 if (-not (Test-Path $subprojects)) {
     New-Item -Path $subprojects -ItemType Directory | Out-Null
