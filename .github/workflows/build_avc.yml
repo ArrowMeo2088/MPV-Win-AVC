@@ -44,17 +44,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ffmpeg/build/win-x64-static
-          key: ffmpeg-avc-static-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
+          key: ffmpeg-avc-static-v3-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
           restore-keys: |
-            ffmpeg-avc-static-
+            ffmpeg-avc-static-v3-
+
+      - name: Cache FFmpeg install prefix
+        uses: actions/cache@v4
+        with:
+          path: ffmpeg/dist/ffmpeg-win-x64-static/prefix
+          key: ffmpeg-avc-prefix-v3-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
+          restore-keys: |
+            ffmpeg-avc-prefix-v3-
 
       - name: Cache MPV build tree
         uses: actions/cache@v4
         with:
           path: mpv/build
-          key: mpv-avc-build-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/meson.build') }}
+          key: mpv-avc-build-v3-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/meson.build') }}
           restore-keys: |
-            mpv-avc-build-
+            mpv-avc-build-v3-
 
       - name: Setup MSYS2 MINGW64
         uses: msys2/setup-msys2@v2
@@ -62,29 +70,60 @@ jobs:
           msystem: MINGW64
           update: true
           cache: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-nasm
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-libvpl
+            mingw-w64-x86_64-libxml2
+            mingw-w64-x86_64-libplacebo
+            mingw-w64-x86_64-shaderc
+            mingw-w64-x86_64-spirv-cross
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            make
+            diffutils
+
+      - name: Preflight FFmpeg prefix
+        shell: msys2 {0}
+        working-directory: mpv
+        env:
+          FFMPEG_SRC: ../ffmpeg
+        run: |
+          bash ../ffmpeg/scripts/build-win-mingw-static.sh
+          export PKG_CONFIG_PATH="$(cd ../ffmpeg/dist/ffmpeg-win-x64-static/prefix && pwd)/lib/pkgconfig"
+          export PKG_CONFIG="pkg-config --static"
+          pkg-config --print-errors --exists libavcodec libavformat libavutil libplacebo
+          ls ../ffmpeg/dist/ffmpeg-win-x64-static/prefix/lib/*.a
 
       - name: Build libmpv (FFmpeg static + DASH)
         shell: msys2 {0}
+        working-directory: mpv
         env:
-          FFMPEG_SRC: ${{ github.workspace }}/ffmpeg
-          FFMPEG_DIST_DIR: ${{ github.workspace }}/ffmpeg/dist/ffmpeg-win-x64-static
-          FFMPEG_PREFIX: ${{ github.workspace }}/ffmpeg/dist/ffmpeg-win-x64-static/prefix
+          FFMPEG_SRC: ../ffmpeg
           MPV_PACK_MODE: ldd
           MPV_LTO: 'false'
-        run: bash ./mpv/ci/build-avc-msys2.sh
-        working-directory: ${{ github.workspace }}
+          MPV_SKIP_PACMAN: '1'
+        run: bash ./ci/build-avc-msys2.sh
 
       - name: Print logs on failure
         if: failure()
         shell: msys2 {0}
+        working-directory: mpv
         run: |
-          if [[ -f mpv/build/meson-logs/meson-log.txt ]]; then
-            tail -n 200 mpv/build/meson-logs/meson-log.txt
+          export PKG_CONFIG_PATH="$(cd ../ffmpeg/dist/ffmpeg-win-x64-static/prefix && pwd)/lib/pkgconfig"
+          export PKG_CONFIG="pkg-config --static"
+          pkg-config --libs --static libavformat | head -c 500 || true
+          echo
+          if [[ -f build/meson-logs/meson-log.txt ]]; then
+            tail -n 200 build/meson-logs/meson-log.txt
           fi
-          if [[ -f ffmpeg/build/win-x64-static/ffbuild/config.log ]]; then
-            tail -n 200 ffmpeg/build/win-x64-static/ffbuild/config.log
+          if [[ -f build/meson-logs/meson-setup.txt ]]; then
+            tail -n 100 build/meson-logs/meson-setup.txt
           fi
-        working-directory: ${{ github.workspace }}
+          if [[ -f ../ffmpeg/build/win-x64-static/ffbuild/config.log ]]; then
+            tail -n 200 ../ffmpeg/build/win-x64-static/ffbuild/config.log
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

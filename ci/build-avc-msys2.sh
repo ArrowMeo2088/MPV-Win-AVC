@@ -11,30 +11,39 @@ jobs="${MPV_JOBS:-$(nproc 2>/dev/null || echo 4)}"
 pack_mode="${MPV_PACK_MODE:-ldd}"
 use_lto="${MPV_LTO:-false}"
 mingw_bin="/mingw64/bin"
+skip_pacman="${MPV_SKIP_PACMAN:-0}"
 
-ffmpeg_src="${FFMPEG_SRC:-$root_dir/../FFmpeg-Win-AVC-DLL}"
-ffmpeg_dist="${FFMPEG_DIST_DIR:-$ffmpeg_src/dist/ffmpeg-win-x64-static}"
-ffmpeg_prefix="${FFMPEG_PREFIX:-$ffmpeg_dist/prefix}"
-
-if command -v cygpath >/dev/null 2>&1; then
-  ffmpeg_src="$(cygpath -u "$ffmpeg_src")"
-  ffmpeg_dist="$(cygpath -u "$ffmpeg_dist")"
-  ffmpeg_prefix="$(cygpath -u "$ffmpeg_prefix")"
+if [[ -d "$root_dir/../ffmpeg" ]]; then
+  ffmpeg_src_default="$root_dir/../ffmpeg"
+elif [[ -d "$root_dir/../FFmpeg-Win-AVC-DLL" ]]; then
+  ffmpeg_src_default="$root_dir/../FFmpeg-Win-AVC-DLL"
+else
+  ffmpeg_src_default="$root_dir/../ffmpeg"
 fi
 
-pacman -S --needed --noconfirm \
-  mingw-w64-x86_64-toolchain \
-  mingw-w64-x86_64-meson \
-  mingw-w64-x86_64-ninja \
-  mingw-w64-x86_64-pkgconf \
-  mingw-w64-x86_64-nasm \
-  mingw-w64-x86_64-libplacebo \
-  mingw-w64-x86_64-shaderc \
-  mingw-w64-x86_64-spirv-cross \
-  mingw-w64-x86_64-libvpl \
-  mingw-w64-x86_64-libxml2 \
-  make \
-  diffutils
+ffmpeg_src="${FFMPEG_SRC:-$ffmpeg_src_default}"
+ffmpeg_dist="${FFMPEG_DIST_DIR:-$ffmpeg_src/dist/ffmpeg-win-x64-static}"
+
+mkdir -p "$ffmpeg_dist"
+ffmpeg_src="$(cd "$ffmpeg_src" && pwd)"
+ffmpeg_dist="$(cd "$ffmpeg_dist" && pwd)"
+ffmpeg_prefix="$ffmpeg_dist/prefix"
+
+if [[ "$skip_pacman" != "1" ]]; then
+  pacman -S --needed --noconfirm \
+    mingw-w64-x86_64-toolchain \
+    mingw-w64-x86_64-meson \
+    mingw-w64-x86_64-ninja \
+    mingw-w64-x86_64-pkgconf \
+    mingw-w64-x86_64-nasm \
+    mingw-w64-x86_64-libplacebo \
+    mingw-w64-x86_64-shaderc \
+    mingw-w64-x86_64-spirv-cross \
+    mingw-w64-x86_64-libvpl \
+    mingw-w64-x86_64-libxml2 \
+    make \
+    diffutils
+fi
 
 if [[ ! -f "$ffmpeg_prefix/lib/pkgconfig/libavcodec.pc" ]]; then
   echo "=== Building FFmpeg from $ffmpeg_src ==="
@@ -45,16 +54,22 @@ if [[ ! -f "$ffmpeg_prefix/lib/pkgconfig/libavcodec.pc" ]]; then
 fi
 
 export PKG_CONFIG_PATH="$ffmpeg_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-/mingw64/lib/pkgconfig}"
-export PKG_CONFIG="${PKG_CONFIG:-pkg-config}"
+export PKG_CONFIG="${PKG_CONFIG:-pkg-config --static}"
 export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
 export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
 
 echo "=== FFmpeg pkg-config ==="
+pkg-config --print-errors --exists libavcodec libavformat libavutil libavfilter libswresample libswscale
 pkg-config --modversion libavcodec
-pkg-config --libs --static libavcodec | head -c 200
+pkg-config --libs --static libavformat | head -c 300
 echo
 
 rm -f "$root_dir/subprojects/ffmpeg.wrap"
+
+if [[ -f build/meson-private/cmd_line.txt ]] && ! grep -q 'wrap_mode=nofallback' build/meson-private/cmd_line.txt 2>/dev/null; then
+  echo "=== Removing stale meson build tree ==="
+  rm -rf build
+fi
 
 meson_args=(
   --wrap-mode=nofallback

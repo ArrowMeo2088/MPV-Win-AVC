@@ -32,9 +32,6 @@ libplacebo = dependency('libplacebo', version: '>=7.360.1',
                                   'vulkan=disabled', 'd3d11=enabled', 'shaderc=enabled',
                                   'lcms=disabled', 'dovi=disabled'])
 
-cpp = meson.get_compiler('cpp')
-libstdcxx = cpp.find_library('stdc++', required: true)
-
 # libass removed: stub headers + ass_stub.c (Bili.NetF has no subtitle/OSD stack).
 dependencies = [libavcodec,
                 libavfilter,
@@ -42,8 +39,7 @@ dependencies = [libavcodec,
                 libavutil,
                 libplacebo,
                 libswresample,
-                libswscale,
-                libstdcxx]
+                libswscale]
 
 # Keeps track of all enabled/disabled features
 features = {
