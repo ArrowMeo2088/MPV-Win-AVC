@@ -1,3 +1,7 @@
 /subprojects/*
 !/subprojects/packagefiles
 !/subprojects/*.wrap
+/.deps-prefix
+/.build-deps
+/build
+/dist

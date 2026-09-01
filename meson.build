@@ -27,28 +27,30 @@ libavutil = dependency('libavutil', version: '>= 58.29.100')
 libswresample = dependency('libswresample', version: '>= 4.12.100')
 libswscale = dependency('libswscale', version: '>= 7.5.100')
 
-libplacebo = dependency('libplacebo', version: '>=7.360.1',
-                default_options: ['default_library=static', 'demos=false'])
+libplacebo = dependency('libplacebo', version: '>=7.360.1', static: true,
+                default_options: ['default_library=static', 'demos=false', 'tests=false',
+                                  'vulkan=disabled', 'd3d11=enabled', 'shaderc=enabled',
+                                  'lcms=disabled', 'dovi=disabled'])
 
-libass = dependency('libass', version: '>= 0.12.2')
+cpp = meson.get_compiler('cpp')
+libstdcxx = cpp.find_library('stdc++', required: true)
 
-# the dependency order of libass -> ffmpeg is necessary due to
-# static linking symbol resolution between fontconfig and MinGW
-dependencies = [libass,
-                libavcodec,
+# libass removed: stub headers + ass_stub.c (Bili.NetF has no subtitle/OSD stack).
+dependencies = [libavcodec,
                 libavfilter,
                 libavformat,
                 libavutil,
                 libplacebo,
                 libswresample,
-                libswscale]
+                libswscale,
+                libstdcxx]
 
 # Keeps track of all enabled/disabled features
 features = {
     'debug': get_option('debug'),
     'ffmpeg': true,
     'gpl': get_option('gpl'),
-    'libass': true,
+    'libass': false,
     'libplacebo': true,
 }
 
@@ -206,6 +208,7 @@ sources = files(
 
     ## Subtitles
     'sub/ass_mp.c',
+    'sub/ass_stub.c',
     'sub/dec_sub.c',
     'sub/draw_bmp.c',
     'sub/filter_sdh.c',
@@ -1835,7 +1838,7 @@ client_api_version = major + '.' + minor + '.0'
 
 libmpv = library('mpv', sources, dependencies: dependencies, gnu_symbol_visibility: 'hidden',
                  include_directories: incdir_public,
-                 link_args: cc.get_supported_link_arguments(['-Wl,-Bsymbolic']),
+                 link_args: cc.get_supported_link_arguments(['-Wl,-Bsymbolic', '-static-libgcc']),
                  version: client_api_version, install: get_option('libmpv'),
                  build_by_default: get_option('libmpv'))
 

@@ -22,8 +22,8 @@
 
 #include <stdbool.h>
 
-#include <ass/ass.h>
-#include <ass/ass_types.h>
+#include "ass.h"
+#include "ass_types.h"
 
 // These PlayResX and PlayResY values are arbitrary and taken from lavc.
 // lavc assumes these values when converting to ass generally. Moreover, these

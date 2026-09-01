@@ -22,7 +22,7 @@
 #include <limits.h>
 
 #include <libavutil/common.h>
-#include <ass/ass.h>
+#include "ass.h"
 
 #include "mpv_talloc.h"
 

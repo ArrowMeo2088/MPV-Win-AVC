@@ -27,7 +27,7 @@
 
 #include "config.h" // for HAVE_SUBRANDR
 
-#include <ass/ass.h>
+#include "sub/ass.h"
 #if HAVE_SUBRANDR
 #include <subrandr/subrandr.h>
 #endif
@@ -3992,7 +3992,7 @@ static int mp_property_ffmpeg(void *ctx, struct m_property *prop,
 static int mp_property_libass_version(void *ctx, struct m_property *prop,
                                       int action, void *arg)
 {
-    return m_property_int64_ro(action, arg, ass_library_version());
+    return m_property_int64_ro(action, arg, 0);
 }
 
 static int mp_property_libplacebo_version(void *ctx, struct m_property *prop,

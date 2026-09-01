@@ -24,8 +24,8 @@
 
 #include "config.h"
 
-#include <ass/ass.h>
-#include <ass/ass_types.h>
+#include "ass.h"
+#include "ass_types.h"
 #if HAVE_SUBRANDR
 #include <subrandr/subrandr.h>
 #endif

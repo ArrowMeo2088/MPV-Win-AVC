@@ -24,8 +24,8 @@
 #include <assert.h>
 #include <math.h>
 
-#include <ass/ass.h>
-#include <ass/ass_types.h>
+#include "ass.h"
+#include "ass_types.h"
 
 #include "common/common.h"
 #include "common/msg.h"

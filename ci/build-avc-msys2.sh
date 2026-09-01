@@ -1,25 +1,71 @@
 #!/usr/bin/env bash
 # MSYS2 MINGW64 libmpv: Intel QSV (h264_qsv) + AAC + DASH/fMP4.
+# Minimal runtime: libmpv-2.dll + libvpl-2.dll + MinGW C++ runtime (optional).
 set -euo pipefail
 
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist_dir="${MPV_DIST_DIR:-$root_dir/dist/mpv-win-avc-x64}"
 flat_dir="$dist_dir/bin"
+deps_prefix="${MPV_DEPS_PREFIX:-$root_dir/.deps-prefix}"
 jobs="${MPV_JOBS:-$(nproc 2>/dev/null || echo 4)}"
+pack_mode="${MPV_PACK_MODE:-minimal}"
+mingw_bin="/mingw64/bin"
 
 pacman -S --needed --noconfirm \
   mingw-w64-x86_64-toolchain \
   mingw-w64-x86_64-meson \
   mingw-w64-x86_64-ninja \
   mingw-w64-x86_64-pkgconf \
+  mingw-w64-x86_64-cmake \
   mingw-w64-x86_64-nasm \
-  mingw-w64-x86_64-libass \
-  mingw-w64-x86_64-libplacebo \
-  mingw-w64-x86_64-shaderc \
-  mingw-w64-x86_64-spirv-cross \
   mingw-w64-x86_64-libvpl \
   mingw-w64-x86_64-libxml2 \
   git
+
+mkdir -p "$deps_prefix"/{lib/pkgconfig,include,bin}
+
+export PKG_CONFIG_PATH="${deps_prefix}/lib/pkgconfig:${PKG_CONFIG_PATH:-/mingw64/lib/pkgconfig}"
+
+build_shaderc() {
+  local mark="$deps_prefix/lib/libshaderc_combined.a"
+  [[ -f "$mark" ]] && return 0
+  echo "=== Building static shaderc ==="
+  local src="$root_dir/.build-deps/shaderc"
+  if [[ ! -d "$src/.git" ]]; then
+    rm -rf "$src"
+    git clone --depth=1 https://github.com/google/shaderc.git "$src"
+    (cd "$src" && ./utils/git-sync-deps)
+  fi
+  cmake -S "$src" -B "$src/build" -G Ninja \
+    -DCMAKE_INSTALL_PREFIX="$deps_prefix" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DSHADERC_SKIP_TESTS=ON \
+    -DSHADERC_SKIP_EXAMPLES=ON
+  ninja -C "$src/build" -j"$jobs" install
+}
+
+build_spirv_cross() {
+  local mark="$deps_prefix/lib/libspirv-cross-c.a"
+  [[ -f "$mark" ]] && return 0
+  echo "=== Building static spirv-cross ==="
+  local src="$root_dir/.build-deps/SPIRV-Cross"
+  if [[ ! -d "$src/.git" ]]; then
+    rm -rf "$src"
+    git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Cross.git "$src"
+  fi
+  cmake -S "$src" -B "$src/build" -G Ninja \
+    -DCMAKE_INSTALL_PREFIX="$deps_prefix" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DSPIRV_CROSS_SHARED=OFF \
+    -DSPIRV_CROSS_STATIC=ON \
+    -DSPIRV_CROSS_CLI=OFF \
+    -DSPIRV_CROSS_ENABLE_TESTS=OFF
+  ninja -C "$src/build" -j"$jobs" install
+}
+
+build_shaderc
+build_spirv_cross
 
 mkdir -p subprojects
 cat >subprojects/ffmpeg.wrap <<'EOF'
@@ -37,6 +83,9 @@ EOF
 rm -rf build
 meson setup build \
   --wrap-mode=forcefallback \
+  --force-fallback-for=libplacebo \
+  -Dbuildtype=release \
+  -Db_lto=true \
   -Ddefault_library=shared \
   -Dffmpeg:default_library=static \
   -Dc_args=-march=x86-64-v2 \
@@ -44,6 +93,7 @@ meson setup build \
   -Dcplayer=false \
   -Dtests=false \
   -Dgpl=false \
+  -Diconv=disabled \
   -Dlua=disabled \
   -Djavascript=disabled \
   -Dsubrandr=disabled \
@@ -70,9 +120,11 @@ meson setup build \
   -Ddrm=disabled \
   -Dwayland=disabled \
   -Dx11=disabled \
+  -Dlibplacebo:default_library=static \
   -Dlibplacebo:demos=false \
   -Dlibplacebo:tests=false \
   -Dlibplacebo:vulkan=disabled \
+  -Dlibplacebo:opengl=disabled \
   -Dlibplacebo:d3d11=enabled \
   -Dlibplacebo:shaderc=enabled \
   -Dlibplacebo:lcms=disabled \
@@ -113,7 +165,6 @@ meson setup build \
   -Dffmpeg:muxers=disabled \
   -Dffmpeg:parsers=disabled \
   -Dffmpeg:h264_parser=enabled \
-  -Dffmpeg:hevc_parser=enabled \
   -Dffmpeg:aac_parser=enabled \
   -Dffmpeg:bsfs=disabled \
   -Dffmpeg:h264_mp4toannexb_bsf=enabled \
@@ -139,9 +190,6 @@ meson setup build \
   -Dffmpeg:https_protocol=enabled \
   -Dffmpeg:tcp_protocol=enabled \
   -Dffmpeg:tls_protocol=enabled \
-  -Dffmpeg:pipe_protocol=enabled \
-  -Dffmpeg:udp_protocol=enabled \
-  -Dffmpeg:dtls_protocol=enabled \
   -Dffmpeg:hwaccels=disabled \
   -Dffmpeg:w32threads=enabled \
   -Dffmpeg:pthreads=disabled \
@@ -151,52 +199,64 @@ meson setup build \
   -Dffmpeg:version3=enabled
 
 ninja -C build -j"$jobs" libmpv-2.dll
+strip -s build/libmpv-2.dll
 
 rm -rf "$dist_dir"
 mkdir -p "$flat_dir" "$dist_dir/config"
 cp -f build/libmpv-2.dll "$flat_dir/"
 
-# Runtime DLL closure (MinGW prefix only).
-declare -A queued=()
-queue=()
-mingw_bin="/mingw64/bin"
-
-enqueue() {
-  local f="$1"
-  [[ -f "$f" ]] || return 0
-  local key
-  key="$(basename "$f")"
-  [[ -n "${queued[$key]:-}" ]] && return 0
-  queued[$key]=1
-  queue+=("$f")
-}
-
-# h264_qsv loads libvpl via dlopen; ldd does not see it.
-for runtime_dll in libvpl-2.dll; do
-  src="$mingw_bin/$runtime_dll"
+copy_mingw_dll() {
+  local name="$1"
+  local src="$mingw_bin/$name"
   if [[ ! -f "$src" ]]; then
-    echo "ERROR: required runtime DLL missing: $src" >&2
+    echo "ERROR: required DLL missing: $src" >&2
     exit 1
   fi
-  cp -f "$src" "$flat_dir/"
-  enqueue "$flat_dir/$runtime_dll"
-done
+  cp -f "$src" "$flat_dir/$name"
+}
 
-enqueue "$flat_dir/libmpv-2.dll"
-while ((${#queue[@]} > 0)); do
-  current="${queue[0]}"
-  queue=("${queue[@]:1}")
-  while read -r dep; do
-    [[ -n "$dep" && -f "$dep" ]] || continue
-    [[ "$dep" == "$mingw_bin/"* ]] || continue
-    dest="$flat_dir/$(basename "$dep")"
-    [[ -f "$dest" ]] || cp -f "$dep" "$dest"
-    enqueue "$dest"
-  done < <(ldd "$current" 2>/dev/null | awk '/=>/ {print $3}')
-done
+# h264_qsv loads libvpl via dlopen.
+copy_mingw_dll libvpl-2.dll
+
+is_allowed_dll() {
+  case "$1" in
+    libmpv-2.dll|libvpl-2.dll|libgcc_s_seh-1.dll|libssp-0.dll|libstdc++-6.dll|libwinpthread-1.dll)
+      return 0 ;;
+  esac
+  return 1
+}
+
+while read -r dep; do
+  [[ -n "$dep" && -f "$dep" ]] || continue
+  [[ "$dep" == "$mingw_bin/"* ]] || continue
+  name="$(basename "$dep")"
+  [[ "$name" == "libmpv-2.dll" ]] && continue
+  if is_allowed_dll "$name"; then
+    [[ -f "$flat_dir/$name" ]] || cp -f "$dep" "$flat_dir/$name"
+  elif [[ "$pack_mode" == "minimal" ]]; then
+    echo "ERROR: unexpected MinGW dependency: $name ($dep)" >&2
+    exit 1
+  else
+    cp -f "$dep" "$flat_dir/$name"
+  fi
+done < <(ldd "$flat_dir/libmpv-2.dll" 2>/dev/null | awk '/=>/ {print $3}')
+
+{
+  echo "# MPV-Win-AVC runtime manifest"
+  echo "# generated: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  total=0
+  while IFS= read -r f; do
+    sz=$(stat -c%s "$f" 2>/dev/null || wc -c <"$f")
+    total=$((total + sz))
+    printf '%8d  %s\n' "$sz" "$(basename "$f")"
+  done < <(find "$flat_dir" -maxdepth 1 -name '*.dll' | sort)
+  echo "--------"
+  printf 'total %d bytes (%.2f MiB)\n' "$total" "$(awk "BEGIN {printf \"%.2f\", $total/1024/1024}")"
+} >"$flat_dir/MANIFEST.txt"
 
 cp -f etc/mpv-avc-kernel.conf "$dist_dir/config/"
 cp -f BUILD_AVC.md "$dist_dir/"
 
 echo "=== Done: $flat_dir ==="
 ls -1 "$flat_dir"
+cat "$flat_dir/MANIFEST.txt"
