@@ -16,6 +16,12 @@ ffmpeg_src="${FFMPEG_SRC:-$root_dir/../FFmpeg-Win-AVC-DLL}"
 ffmpeg_dist="${FFMPEG_DIST_DIR:-$ffmpeg_src/dist/ffmpeg-win-x64-static}"
 ffmpeg_prefix="${FFMPEG_PREFIX:-$ffmpeg_dist/prefix}"
 
+if command -v cygpath >/dev/null 2>&1; then
+  ffmpeg_src="$(cygpath -u "$ffmpeg_src")"
+  ffmpeg_dist="$(cygpath -u "$ffmpeg_dist")"
+  ffmpeg_prefix="$(cygpath -u "$ffmpeg_prefix")"
+fi
+
 pacman -S --needed --noconfirm \
   mingw-w64-x86_64-toolchain \
   mingw-w64-x86_64-meson \
@@ -39,7 +45,9 @@ if [[ ! -f "$ffmpeg_prefix/lib/pkgconfig/libavcodec.pc" ]]; then
 fi
 
 export PKG_CONFIG_PATH="$ffmpeg_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-/mingw64/lib/pkgconfig}"
-export PKG_CONFIG="${PKG_CONFIG:-pkg-config --static}"
+export PKG_CONFIG="${PKG_CONFIG:-pkg-config}"
+export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1
+export PKG_CONFIG_ALLOW_SYSTEM_LIBS=1
 
 echo "=== FFmpeg pkg-config ==="
 pkg-config --modversion libavcodec
