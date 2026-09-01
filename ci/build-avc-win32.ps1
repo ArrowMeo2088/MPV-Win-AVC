@@ -9,16 +9,6 @@ $subprojects = "subprojects"
 $distDir = "dist/mpv-win-avc-x64"
 $vcpkgRoot = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { "C:\vcpkg" }
 
-foreach ($tool in @('meson', 'ninja', 'git', 'python')) {
-    if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) {
-        throw "Missing required tool on PATH: $tool"
-    }
-}
-if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
-    throw "Missing nasm on PATH (CI: run ci/install-ci-deps.ps1 first)"
-}
-Write-Host "nasm: $(nasm -v | Select-Object -First 1)"
-
 if (-not (Test-Path $subprojects)) {
     New-Item -Path $subprojects -ItemType Directory | Out-Null
 }
