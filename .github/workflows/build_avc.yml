@@ -5,7 +5,7 @@ on:
     branches: [master, main]
     paths:
       - '.github/workflows/build_avc.yml'
-      - 'ci/build-avc-win32.ps1'
+      - 'ci/build-avc-msys2.sh'
       - 'etc/mpv-avc-kernel.conf'
       - 'BUILD_AVC.md'
       - 'meson.build'
@@ -21,85 +21,30 @@ concurrency:
   group: build-avc-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  VCPKG_ROOT: C:\vcpkg
-  CC: ccache clang
-  CXX: ccache clang++
-  CC_LD: lld-link
-  CXX_LD: lld-link
-  RUST_LD: lld-link
-  WINDRES: llvm-rc
-  CCACHE_BASEDIR: ${{ github.workspace }}
-  CCACHE_DIR: ${{ github.workspace }}\.ccache
-  CCACHE_MAXSIZE: 500M
-
 jobs:
-  win64-avc:
-    runs-on: windows-2025
+  mingw64:
+    runs-on: windows-latest
 
     steps:
-      - name: Disable autocrlf
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-
       - uses: actions/checkout@v4
 
-      - name: Install NASM
-        uses: ilammy/setup-nasm@v1
+      - name: Setup MSYS2 MINGW64
+        uses: msys2/setup-msys2@v2
         with:
-          version: '2.16.01'
-
-      - name: Install meson and ninja
-        run: python -m pip install meson ninja
-
-      - name: Install ccache
-        run: |
-          winget install --accept-source-agreements --accept-package-agreements Ccache.Ccache
-          echo "$env:LOCALAPPDATA\Microsoft\WinGet\Links" >> $env:GITHUB_PATH
-
-      - name: Install vcpkg packages
-        env:
-          VCPKG_ROOT: C:\vcpkg
-        run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install `
-            libvpl:x64-windows `
-            libxml2:x64-windows-static `
-            pkgconf:x64-windows
-
-      - name: Find Visual Studio
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
-          if (-not $vsPath) { throw "Could not find a Visual Studio installation" }
-          "VS=$vsPath" >> $env:GITHUB_ENV
+          msystem: MINGW64
+          update: true
 
       - name: Build libmpv (AVC + DASH)
-        id: build
-        run: |
-          $env:PATH = ($env:PATH -split ';' | Where-Object {
-            $_ -and `
-            $_ -ne 'C:\Program Files\LLVM\bin' -and `
-            $_ -ne 'C:\Program Files\CMake\bin' -and `
-            $_ -ne 'C:\Strawberry\c\bin'
-          }) -join ';'
-          nasm -v
-          meson --version
-          ninja --version
-          Import-Module "$env:VS\Common7\Tools\Microsoft.VisualStudio.DevShell.dll"
-          Enter-VsDevShell -VsInstallPath $env:VS -SkipAutomaticLocation -DevCmdArguments "-arch=amd64 -host_arch=amd64"
-          # DevShell resets VCPKG_ROOT to VS-bundled vcpkg (no pkgconf). Restore GHA path.
-          $env:VCPKG_ROOT = 'C:\vcpkg'
-          $env:PKG_CONFIG = 'C:\vcpkg\installed\x64-windows\tools\pkgconf\pkgconf.exe'
-          $env:PKG_CONFIG_PATH = 'C:\vcpkg\installed\x64-windows\lib\pkgconfig;C:\vcpkg\installed\x64-windows-static\lib\pkgconfig'
-          ./ci/build-avc-win32.ps1
+        shell: msys2 {0}
+        run: bash ./ci/build-avc-msys2.sh
 
       - name: Print meson log on failure
-        if: failure() && steps.build.outcome == 'failure'
+        if: failure()
+        shell: msys2 {0}
         run: |
-          if (Test-Path build/meson-logs/meson-log.txt) {
-            Get-Content build/meson-logs/meson-log.txt -Tail 200
-          }
+          if [[ -f build/meson-logs/meson-log.txt ]]; then
+            tail -n 200 build/meson-logs/meson-log.txt
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
