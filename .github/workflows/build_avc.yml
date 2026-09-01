@@ -15,6 +15,7 @@ on:
       - 'sub/ass.h'
       - 'sub/ass_types.h'
       - 'patches/**'
+      - 'subprojects/**'
       - '**/*.c'
       - '**/*.h'
       - '**/*.build'
@@ -31,11 +32,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache static deps (shaderc/spirv-cross)
+        uses: actions/cache@v4
+        with:
+          path: |
+            .deps-prefix
+            .build-deps
+          key: mpv-avc-deps-${{ hashFiles('ci/build-avc-msys2.sh') }}
+          restore-keys: |
+            mpv-avc-deps-
+
+      - name: Cache meson subprojects + build tree
+        uses: actions/cache@v4
+        with:
+          path: |
+            subprojects/ffmpeg
+            subprojects/libplacebo
+            build
+          key: mpv-avc-build-${{ hashFiles('ci/build-avc-msys2.sh', 'meson.build', 'meson.options') }}
+          restore-keys: |
+            mpv-avc-build-
+
       - name: Setup MSYS2 MINGW64
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: true
+          cache: true
 
       - name: Build libmpv (AVC + DASH)
         shell: msys2 {0}

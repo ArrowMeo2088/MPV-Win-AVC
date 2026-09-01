@@ -36,11 +36,14 @@ bash ./ci/build-avc-msys2.sh
 
 脚本会：
 
-1. 自编译**静态** `shaderc`、`spirv-cross` 到 `.deps-prefix/`
+1. 自编译**静态** `shaderc`、`spirv-cross` 到 `.deps-prefix/`（CI 有 cache，命中后跳过）
 2. `force-fallback` 构建**静态** `libplacebo`（无 dovi/lcms/vulkan）
 3. 使用 in-tree **libass stub**（无 pacman libass）
-4. `-Dbuildtype=release`、`-Db_lto=true`、`strip libmpv-2.dll`
-5. 显式复制 `libvpl-2.dll` 并校验 `ldd` 闭包
+4. `-Dbuildtype=release`、可选 `-Db_lto=true`（`MPV_LTO=false` 可加速调试）、`strip libmpv-2.dll`
+5. 增量 `meson setup --reconfigure` + `ninja`（不再每次 `rm -rf build`）
+6. 显式复制 `libvpl-2.dll` 并校验 `ldd` 闭包
+
+CI 加速：GitHub Actions cache 缓存 `.deps-prefix`、`.build-deps`、`subprojects/*`、`build/`；MSYS2 `cache: true` 缓存 pacman 包。改源码小修时通常 **5–8 分钟**，冷启动约 **12–15 分钟**。
 
 回退全量 `ldd` 打包：`MPV_PACK_MODE=ldd bash ./ci/build-avc-msys2.sh`
 

@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stddef.h>
 
 #include "ass.h"
 #include "ass_types.h"
@@ -153,13 +154,13 @@ void ass_set_line_position(ASS_Renderer *priv, double line_position)
 
 void ass_get_available_font_providers(ASS_Library *priv,
                                       ASS_DefaultFontProvider **providers,
-                                      int *n_providers)
+                                      size_t *size)
 {
     (void)priv;
     if (providers)
         *providers = NULL;
-    if (n_providers)
-        *n_providers = 0;
+    if (size)
+        *size = 0;
 }
 
 void ass_set_fonts(ASS_Renderer *priv, const char *default_font,
