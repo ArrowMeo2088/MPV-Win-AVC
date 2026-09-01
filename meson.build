@@ -27,6 +27,9 @@ libavutil = dependency('libavutil', version: '>= 58.29.100', static: true)
 libswresample = dependency('libswresample', version: '>= 4.12.100', static: true)
 libswscale = dependency('libswscale', version: '>= 7.5.100', static: true)
 
+# Static FFmpeg private deps (meson does not propagate Libs.private).
+libxml2 = dependency('libxml-2.0', static: true)
+
 libplacebo = dependency('libplacebo', version: '>=7.360.1',
                 default_options: ['demos=false', 'tests=false',
                                   'vulkan=disabled', 'd3d11=enabled', 'shaderc=enabled',
@@ -39,7 +42,8 @@ dependencies = [libavcodec,
                 libavutil,
                 libplacebo,
                 libswresample,
-                libswscale]
+                libswscale,
+                libxml2]
 
 # Keeps track of all enabled/disabled features
 features = {
@@ -280,6 +284,10 @@ sources = files(
 
 # compiler stuff
 cc = meson.get_compiler('c')
+
+# libvpl must stay a runtime DLL (see FFmpeg-Win-AVC-DLL package script).
+libvpl = cc.find_library('vpl', static: false, required: true)
+dependencies += libvpl
 
 flags = ['-D_FILE_OFFSET_BITS=64']
 flags_c = []

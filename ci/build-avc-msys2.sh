@@ -51,6 +51,11 @@ if [[ ! -f "$ffmpeg_prefix/lib/pkgconfig/libavcodec.pc" ]]; then
   FFMPEG_DIST_DIR="$ffmpeg_dist" \
   FFMPEG_PREFIX="$ffmpeg_prefix" \
     bash "$ffmpeg_src/scripts/build-win-mingw-static.sh"
+else
+  echo "=== Reusing FFmpeg prefix; applying package/.pc fixes ==="
+  FFMPEG_DIST_DIR="$ffmpeg_dist" \
+  FFMPEG_PREFIX="$ffmpeg_prefix" \
+    bash "$ffmpeg_src/scripts/package-win-mingw-static.sh"
 fi
 
 export PKG_CONFIG_PATH="$ffmpeg_prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-/mingw64/lib/pkgconfig}"
@@ -63,6 +68,11 @@ pkg-config --print-errors --exists libavcodec libavformat libavutil libavfilter 
 pkg-config --modversion libavcodec
 pkg-config --libs --static libavformat | head -c 300
 echo
+
+echo "=== Static link closure preflight ==="
+libs=$(pkg-config --libs --static libavformat libavcodec)
+echo "$libs" | grep -q -- '-lxml2' || { echo "ERROR: libavformat static libs missing -lxml2" >&2; exit 1; }
+echo "$libs" | grep -q -- '-lvpl' && { echo "ERROR: -lvpl must not appear in static .pc (use runtime DLL)" >&2; exit 1; }
 
 rm -f "$root_dir/subprojects/ffmpeg.wrap"
 
@@ -118,6 +128,8 @@ if [[ -d build/meson-private ]]; then
 else
   meson setup build "${meson_args[@]}"
 fi
+
+bash "$root_dir/ci/link-smoke.sh"
 
 ninja -C build -j"$jobs" libmpv-2.dll
 strip -s build/libmpv-2.dll

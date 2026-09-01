@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/build_avc.yml'
       - 'ci/build-avc-msys2.sh'
+      - 'ci/link-smoke.sh'
       - 'etc/mpv-avc-kernel.conf'
       - 'BUILD_AVC.md'
       - 'meson.build'
@@ -44,25 +45,25 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ffmpeg/build/win-x64-static
-          key: ffmpeg-avc-static-v3-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
+          key: ffmpeg-avc-static-v4-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh') }}
           restore-keys: |
-            ffmpeg-avc-static-v3-
+            ffmpeg-avc-static-v4-
 
       - name: Cache FFmpeg install prefix
         uses: actions/cache@v4
         with:
           path: ffmpeg/dist/ffmpeg-win-x64-static/prefix
-          key: ffmpeg-avc-prefix-v3-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh') }}
+          key: ffmpeg-avc-prefix-v4-${{ hashFiles('ffmpeg/scripts/configure-avc-dash-mingw-static.sh', 'ffmpeg/scripts/package-win-mingw-static.sh') }}
           restore-keys: |
-            ffmpeg-avc-prefix-v3-
+            ffmpeg-avc-prefix-v4-
 
       - name: Cache MPV build tree
         uses: actions/cache@v4
         with:
           path: mpv/build
-          key: mpv-avc-build-v3-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/meson.build') }}
+          key: mpv-avc-build-v4-${{ hashFiles('mpv/ci/build-avc-msys2.sh', 'mpv/ci/link-smoke.sh', 'mpv/meson.build') }}
           restore-keys: |
-            mpv-avc-build-v3-
+            mpv-avc-build-v4-
 
       - name: Setup MSYS2 MINGW64
         uses: msys2/setup-msys2@v2
@@ -95,6 +96,9 @@ jobs:
           export PKG_CONFIG="pkg-config --static"
           pkg-config --print-errors --exists libavcodec libavformat libavutil libplacebo
           ls ../ffmpeg/dist/ffmpeg-win-x64-static/prefix/lib/*.a
+          pkg-config --libs --static libavformat | grep -q -- '-lxml2'
+          pkg-config --libs --static libavcodec | grep -qv -- '-lvpl'
+          bash ./ci/link-smoke.sh
 
       - name: Build libmpv (FFmpeg static + DASH)
         shell: msys2 {0}
@@ -113,7 +117,9 @@ jobs:
         run: |
           export PKG_CONFIG_PATH="$(cd ../ffmpeg/dist/ffmpeg-win-x64-static/prefix && pwd)/lib/pkgconfig"
           export PKG_CONFIG="pkg-config --static"
-          pkg-config --libs --static libavformat | head -c 500 || true
+          pkg-config --libs --static libavcodec libavformat || true
+          echo
+          ls -la /mingw64/lib/libvpl* 2>/dev/null || true
           echo
           if [[ -f build/meson-logs/meson-log.txt ]]; then
             tail -n 200 build/meson-logs/meson-log.txt

@@ -29,6 +29,18 @@ FFmpeg 来自独立仓库 [FFmpeg-Win-AVC-DLL](https://github.com/ArrowMeo2088/F
 
 `bin/MANIFEST.txt` 记录实际文件大小与 DLL 数量。
 
+## 静态链接闭包
+
+静态 FFmpeg 链入 `libmpv-2.dll` 时，meson 不会自动传播 `libavformat.pc` 的 `Libs.private`：
+
+| 依赖 | 方式 | meson 处理 |
+|------|------|------------|
+| libav* | 静态 `.a` | `dependency(..., static: true)` |
+| libxml2（DASH） | 静态 | `dependency('libxml-2.0', static: true)` |
+| libvpl（QSV） | 动态 `libvpl-2.dll` | `cc.find_library('vpl', static: false)` |
+
+FFmpeg prefix 的 `.pc` 已剥离 `-lvpl`（见 FFmpeg `package-win-mingw-static.sh`）。构建前会运行 `ci/link-smoke.sh` 验证链接闭包。
+
 ## 本地构建
 
 ```bash
