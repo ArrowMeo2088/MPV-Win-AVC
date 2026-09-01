@@ -21,9 +21,6 @@ pacman -S --needed --noconfirm \
   mingw-w64-x86_64-libxml2 \
   git
 
-# Prefer static archives so libass/libplacebo/font stack link into libmpv-2.dll.
-export PKG_CONFIG="pkg-config --static"
-
 mkdir -p subprojects
 cat >subprojects/ffmpeg.wrap <<'EOF'
 [wrap-git]
@@ -73,7 +70,6 @@ meson setup build \
   -Ddrm=disabled \
   -Dwayland=disabled \
   -Dx11=disabled \
-  -Dlibplacebo:default_library=static \
   -Dlibplacebo:demos=false \
   -Dlibplacebo:tests=false \
   -Dlibplacebo:vulkan=disabled \

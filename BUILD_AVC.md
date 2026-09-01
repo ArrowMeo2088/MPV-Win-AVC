@@ -26,25 +26,13 @@ cd /path/to/MPV-Win-AVC
 bash ./ci/build-avc-msys2.sh
 ```
 
-产出：`dist/mpv-win-avc-x64/bin/`（`libmpv-2.dll` + `libvpl-2.dll` + MinGW/渲染运行时依赖）。
+产出：`dist/mpv-win-avc-x64/bin/`（`libmpv-2.dll` + `libvpl-2.dll` + MinGW 运行时依赖闭包）。
 
 打包说明：
 
 - `libvpl-2.dll` 由 FFmpeg `h264_qsv` 在运行时 `dlopen`，脚本会**显式复制**（`ldd` 无法自动发现）。
-- `libass` / `libplacebo` 及其字体栈通过 `static: true` + `PKG_CONFIG=pkg-config --static` **静态链入** `libmpv-2.dll`，避免 `libass-9.dll`、`libfreetype`、`libfontconfig` 等字幕/OSD 运行时 DLL。
-- `libplacebo:dovi=disabled` 去掉 `libdovi.dll` 依赖。
-
-预期运行时 DLL（约 7 个，视 MSYS2 版本略有出入）：
-
-| DLL | 用途 |
-|-----|------|
-| `libmpv-2.dll` | libmpv + 静态 FFmpeg / libass / libplacebo |
-| `libvpl-2.dll` | Intel QSV |
-| `libshaderc_shared.dll` | D3D11 着色器编译 |
-| `libspirv-cross-c-shared.dll` | SPIR-V 转换 |
-| `libgcc_s_seh-1.dll` | MinGW 运行时 |
-| `libstdc++-6.dll` | MinGW 运行时 |
-| `libwinpthread-1.dll` | MinGW 运行时 |
+- `libass` 为 mpv 硬依赖（字幕/OSD 渲染栈），MSYS2 下无法在不改 mpv 源码的情况下去掉；运行时通过 `mpv-avc-kernel.conf` 关闭字幕/OSD 显示。
+- `libplacebo:dovi=disabled` 尽量去掉 `libdovi.dll`（取决于 MSYS2 预编译 libplacebo 是否仍链入 dovi）。
 
 ## mpv-kernel 初始化
 
