@@ -64,8 +64,33 @@ build_spirv_cross() {
   ninja -C "$src/build" -j"$jobs" install
 }
 
+fix_deps_pkgconfig() {
+  local pcdir="$deps_prefix/lib/pkgconfig"
+  mkdir -p "$pcdir"
+
+  # shaderc static install may still emit shaderc_shared in shaderc.pc.
+  if [[ -f "$pcdir/shaderc_combined.pc" ]]; then
+    cp -f "$pcdir/shaderc_combined.pc" "$pcdir/shaderc.pc"
+  elif [[ -f "$pcdir/shaderc.pc" ]]; then
+    sed -i 's/shaderc_shared/shaderc_combined/g' "$pcdir/shaderc.pc"
+  fi
+
+  # libplacebo + mpv look up spirv-cross-c-shared; static SPIRV-Cross ships spirv-cross-c.pc.
+  if [[ -f "$pcdir/spirv-cross-c.pc" ]]; then
+    sed 's/^Name:.*/Name: spirv-cross-c-shared/' "$pcdir/spirv-cross-c.pc" \
+      >"$pcdir/spirv-cross-c-shared.pc"
+  fi
+
+  echo "=== deps pkg-config ==="
+  pkg-config --modversion shaderc 2>/dev/null || true
+  pkg-config --libs shaderc 2>/dev/null || true
+  pkg-config --modversion spirv-cross-c-shared 2>/dev/null || true
+  pkg-config --libs spirv-cross-c-shared 2>/dev/null || true
+}
+
 build_shaderc
 build_spirv_cross
+fix_deps_pkgconfig
 
 mkdir -p subprojects
 cat >subprojects/ffmpeg.wrap <<'EOF'
